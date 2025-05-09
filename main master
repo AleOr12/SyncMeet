@@ -1,0 +1,110 @@
+// Mejorado: app.js con interfaz para grupos, usuarios y programación
+import { io } from "https://cdn.socket.io/4.5.4/socket.io.esm.min.js";
+
+const socket = io();
+const root = document.getElementById("root");
+
+let name = "";
+let selected = new Set();
+let groupName = "";
+
+const slots = ["Mon 12pm", "Tue 2pm", "Wed 1pm", "Thu 12pm", "Fri 11am"];
+
+const users = new Map(); // nombre -> { slots }
+const groups = new Map(); // nombreGrupo -> [nombres]
+
+const render = (results = {}) => {
+  root.innerHTML = "";
+
+  if (!name) {
+    const input = document.createElement("input");
+    input.placeholder = "Your name";
+    input.addEventListener("input", (e) => (name = e.target.value));
+    root.appendChild(input);
+
+    const groupInput = document.createElement("input");
+    groupInput.placeholder = "Group name (optional)";
+    groupInput.addEventListener("input", (e) => (groupName = e.target.value));
+    root.appendChild(groupInput);
+
+    const list = document.createElement("ul");
+    slots.forEach((slot) => {
+      const li = document.createElement("li");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.addEventListener("change", () => {
+        if (selected.has(slot)) selected.delete(slot);
+        else selected.add(slot);
+      });
+      li.appendChild(checkbox);
+      li.appendChild(document.createTextNode(slot));
+      list.appendChild(li);
+    });
+    root.appendChild(list);
+
+    const btn = document.createElement("button");
+    btn.textContent = "Submit Availability";
+    btn.onclick = () => {
+      socket.emit("new-availability", {
+        name,
+        slots: Array.from(selected),
+        group: groupName || "default"
+      });
+    };
+    root.appendChild(btn);
+  } else {
+    const title = document.createElement("h2");
+    title.textContent = `Availability Overview (${name})`;
+    root.appendChild(title);
+
+    const groupSelect = document.createElement("select");
+    groupSelect.innerHTML = "<option value=''>-- View Group --</option>";
+    for (let g of groups.keys()) {
+      const opt = document.createElement("option");
+      opt.value = g;
+      opt.textContent = g;
+      groupSelect.appendChild(opt);
+    }
+    groupSelect.addEventListener("change", (e) => {
+      const selectedGroup = e.target.value;
+      if (!selectedGroup) return;
+
+      const groupUsers = groups.get(selectedGroup) || [];
+      const groupSlots = {};
+      groupUsers.forEach((u) => {
+        const userSlots = users.get(u) || [];
+        userSlots.forEach((s) => {
+          groupSlots[s] = (groupSlots[s] || 0) + 1;
+        });
+      });
+
+      const best = Object.entries(groupSlots).sort((a, b) => b[1] - a[1])[0];
+      alert(`Best slot for ${selectedGroup}: ${best ? best[0] + " (" + best[1] + " users)" : "No data"}`);
+    });
+    root.appendChild(groupSelect);
+
+    const summary = document.createElement("div");
+    summary.innerHTML = "<h3>All Users Availability</h3>";
+    for (let [user, slots] of users.entries()) {
+      const p = document.createElement("p");
+      p.textContent = `${user}: ${slots.join(", ")}`;
+      summary.appendChild(p);
+    }
+    root.appendChild(summary);
+  }
+};
+
+socket.on("connect", () => console.log("Connected to server"));
+
+socket.on("availability-updated", (data) => {
+  users.clear();
+  groups.clear();
+  data.entries.forEach(({ name, slots, group }) => {
+    users.set(name, slots);
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(name);
+  });
+  render();
+});
+
+render();
