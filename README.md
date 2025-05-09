@@ -1,4 +1,4 @@
-# SyncMeet (Render Edition)
+# SyncMeet 
 
 SyncMeet es una herramienta en tiempo real para encontrar horarios disponibles entre varios participantes.
 
